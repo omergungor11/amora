@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// Amora — Firestore Security Rules (Phase B)
+//
+// Everything lives under users/{uid}, so a single rule isolates each user
+// (anonymous or Google-linked) to their own subtree. Characters stay in app
+// code; only the user's own profile / swipes / matches / messages are stored.
+//
+//   users/{uid}                                  -> profile document
+//   users/{uid}/swipes/{characterId}             -> { direction, createdAt }
+//   users/{uid}/matches/{characterId}            -> { createdAt }
+//   users/{uid}/matches/{characterId}/messages/* -> { role, content, createdAt }
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Everything else is denied by default.
+  }
+}

@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  background: #0b0613;
+  color: #f5f3ff;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* App shell: animated aurora background */
+.aurora {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+.aurora::before,
+.aurora::after {
+  content: "";
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.55;
+  animation: float 16s ease-in-out infinite;
+}
+.aurora::before {
+  background: radial-gradient(circle at 30% 30%, #ff4d8d, transparent 60%);
+  top: -10vmax;
+  left: -10vmax;
+}
+.aurora::after {
+  background: radial-gradient(circle at 70% 70%, #8b5cf6, transparent 60%);
+  bottom: -15vmax;
+  right: -10vmax;
+  animation-delay: -8s;
+}
+/* third, slower accent blob for richer depth */
+.aurora-extra {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.aurora-extra::before {
+  content: "";
+  position: absolute;
+  width: 48vmax;
+  height: 48vmax;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.4;
+  background: radial-gradient(circle at 50% 50%, #38bdf8, transparent 62%);
+  top: 25%;
+  left: 30%;
+  animation: float 22s ease-in-out infinite;
+  animation-delay: -4s;
+}
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(4vmax, 3vmax) scale(1.1); }
+}
+
+/* soft vignette + fine film grain over the whole app for a premium feel */
+.app-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 50% 30%, transparent 55%, rgba(0, 0, 0, 0.45) 100%);
+}
+.app-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* swipe-card image: fade in once loaded to avoid a hard pop */
+.card-img {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.card-img.loaded {
+  opacity: 1;
+}
+
+/* prevent text selection while dragging cards */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora::before,
+  .aurora::after,
+  .aurora-extra::before {
+    animation: none;
+  }
+}
