@@ -1,13 +1,14 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { characters } from "../data/characters";
 import { useProfile } from "../store/useProfile";
 import { useEconomy } from "../store/useEconomy";
-import { useTaste } from "../store/useTaste";
 import { useMatches } from "../store/useMatches";
+import { useBlocks } from "../store/useBlocks";
 import { compatPercent } from "../lib/compatibility";
 import { characterPhotos } from "../data/themePhotos";
-import { generateOpener } from "../lib/reply";
+import { loadLikedBy, sendLike } from "../lib/db";
+import { profileToCard } from "../lib/deck";
+import { useAuth } from "../lib/useAuth";
 import type { Character } from "../types";
 
 type Props = {
@@ -16,46 +17,47 @@ type Props = {
   onOpenChat: (characterId: string) => void;
 };
 
-const MAX_LIKERS = 8;
+const MAX_LIKERS = 12;
 
 /**
- * "Seni Beğenenler" — the see-who-liked-you list (a Premium perk). Likers are
- * simulated from the highest-compatibility unseen characters. Free users see a
- * blurred teaser + count; Premium users see real cards and tapping one is an
- * instant mutual match that jumps straight into chat.
+ * "Seni Beğenenler" — the real see-who-liked-you list (a Premium perk). Pulls
+ * the actual users who liked me (`loadLikedBy`), excluding ones already matched.
+ * Free users see a blurred teaser + count; Premium users see real cards and
+ * tapping one is an instant mutual match (they already liked me) → chat.
  */
 export default function LikedYouSheet({ onClose, onUpsell, onOpenChat }: Props) {
   const profile = useProfile((s) => s.profile);
   const premium = useEconomy((s) => s.premium);
-  const seen = useTaste((s) => s.seen);
-  const record = useTaste((s) => s.record);
-  const addMatch = useMatches((s) => s.addMatch);
-  const resolveOpener = useMatches((s) => s.resolveOpener);
+  const addRealMatch = useMatches((s) => s.addRealMatch);
   const hasMatch = useMatches((s) => s.hasMatch);
+  const isBlocked = useBlocks((s) => s.isBlocked);
+  const authUid = useAuth().user?.uid;
+  const [likers, setLikers] = useState<Character[]>([]);
 
-  const likers = useMemo(() => {
-    if (!profile) return [];
-    const want =
-      profile.interestedIn === "everyone"
-        ? null
-        : profile.interestedIn === "women"
-          ? "woman"
-          : "man";
-    return characters
-      .filter((c) => (want ? c.gender === want : true))
-      .filter((c) => !seen.includes(c.id) && !hasMatch(c.id))
-      .map((c) => ({ c, score: compatPercent(profile, c) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, MAX_LIKERS)
-      .map((x) => x.c);
-  }, [profile, seen, hasMatch]);
+  useEffect(() => {
+    if (!authUid) return;
+    loadLikedBy()
+      .then((profs) =>
+        setLikers(
+          profs
+            .map(profileToCard)
+            .filter((c) => !hasMatch(c.id) && !isBlocked(c.id))
+            .slice(0, MAX_LIKERS),
+        ),
+      )
+      .catch(() => setLikers([]));
+    // hasMatch is read once at load; not a reactive dependency here
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUid]);
 
   function likeBack(c: Character) {
-    record(c, "like"); // adds to seen + taste + persists
-    addMatch(c);
-    generateOpener(c).then((text) => resolveOpener(c.id, text));
-    onClose();
-    onOpenChat(c.id);
+    // they already liked me → liking back is an instant mutual match
+    sendLike(c.id, "like").then((matchId) => {
+      if (matchId) addRealMatch(c, matchId);
+      onClose();
+      if (matchId) onOpenChat(c.id);
+    });
+    setLikers((cur) => cur.filter((x) => x.id !== c.id));
   }
 
   return (

@@ -70,11 +70,21 @@ it live → B replies → A sees it live. Real card shows no AI badge.
 > filter). Tests isolate a run via a distinctive age band; production is
 > unaffected. A periodic cleanup / TTL on stale anon profiles is an R4 item.
 
-### R4 — Safety & scale
-- [ ] Report / block; hide blocked users from discovery.
-- [ ] Basic content moderation on profile text/photos.
+### R4 — Safety & scale  🟡 BLOCK/REPORT DONE
+- [x] Block: `users/{me}/blocks/{uid}`; `useBlocks` store hydrated at startup;
+      blocked users hidden from discovery (SwipeDeck), match sync (realtime), and
+      "Seni Beğenenler". Block from the chat ⋯ menu removes the conversation.
+- [x] Report: `reportUser` → `reports/{id}` (reporter-write rule); report also
+      blocks. ⋯ menu in ChatScreen (real matches only) + toast.
+- [ ] **Deploy the updated rules** (adds `reports` create) — report writes are
+      denied until then; block works already (private subtree).
+- [ ] Two-directional block (stop the blocked user from messaging the shared
+      thread — needs a blocks check in the messages rule).
+- [ ] Content moderation on profile text/photos.
 - [ ] Geohash distance queries (`geofire-common`) replacing client-side filter.
-- [ ] Push / unread badges (FCM) — needs Blaze for some pieces.
+- [ ] Push / unread badges (FCM) — needs Blaze.
+
+Verified E2E: mutual match → A blocks B → B gone from A's inbox AND deck.
 
 ## Data model (target)
 

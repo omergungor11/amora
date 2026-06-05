@@ -5,6 +5,7 @@ import {
 import { useProfile } from "../store/useProfile";
 import { useTaste } from "../store/useTaste";
 import { useEconomy } from "../store/useEconomy";
+import { useBlocks } from "../store/useBlocks";
 import { useMatches, type Conversation } from "../store/useMatches";
 import { characters } from "../data/characters";
 
@@ -38,6 +39,9 @@ export async function hydrateFromFirebase(): Promise<void> {
     // economy → daily quota + credits + premium
     const economy = await loadEconomy();
     if (economy) useEconomy.getState().hydrate(economy);
+
+    // blocks → hide blocked users from discovery + matches
+    await useBlocks.getState().hydrate();
 
     // matches + messages → conversations
     const matches = await loadMatches(); // newest first

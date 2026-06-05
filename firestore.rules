@@ -55,6 +55,12 @@ service cloud.firestore {
       }
     }
 
+    // ── reports (moderation) — reporter writes; no client reads ───
+    match /reports/{id} {
+      allow create: if request.auth != null &&
+        request.resource.data.reporter == request.auth.uid;
+    }
+
     // Everything else is denied by default.
   }
 }

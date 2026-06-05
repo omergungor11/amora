@@ -1,4 +1,14 @@
-import type { Character, PublicProfile } from "../types";
+import type { Character, Gender, PublicProfile } from "../types";
+
+/** Two-way interest gate: does this candidate want my gender? (everyone ⇒ yes) */
+export function wantsGender(p: PublicProfile, myGender?: Gender): boolean {
+  if (!myGender) return true;
+  if (p.interestedIn === "everyone") return true;
+  return (
+    (myGender === "woman" && p.interestedIn === "women") ||
+    (myGender === "man" && p.interestedIn === "men")
+  );
+}
 
 /**
  * Adapt a real user's public profile into the deck's `Character` shape so the

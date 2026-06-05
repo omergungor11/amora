@@ -1,6 +1,7 @@
 import { listenRealMatches, loadPublicProfile } from "./db";
 import { profileToCard } from "./deck";
 import { useMatches } from "../store/useMatches";
+import { useBlocks } from "../store/useBlocks";
 
 /**
  * Live sync of real user↔user matches into the matches store. Subscribes once
@@ -16,6 +17,7 @@ export function startMatchSync(): void {
   unsub = listenRealMatches(async (matches) => {
     for (const m of matches) {
       if (known.has(m.matchId)) continue;
+      if (useBlocks.getState().isBlocked(m.otherUid)) continue; // hide blocked
       known.add(m.matchId);
       const prof = await loadPublicProfile(m.otherUid);
       if (!prof) {

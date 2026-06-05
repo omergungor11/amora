@@ -9,6 +9,7 @@ import { useTaste } from "../store/useTaste";
 import { useMatches } from "../store/useMatches";
 import { useProfile } from "../store/useProfile";
 import { useEconomy } from "../store/useEconomy";
+import { useBlocks } from "../store/useBlocks";
 import { generateOpener } from "../lib/reply";
 import { generateInsight } from "../lib/coach";
 import {
@@ -17,7 +18,7 @@ import {
 import { distanceKm as geoDistance } from "../lib/geo";
 import { loadCandidates, sendLike } from "../lib/db";
 import { useAuth } from "../lib/useAuth";
-import { profileToCard } from "../lib/deck";
+import { profileToCard, wantsGender } from "../lib/deck";
 import { isAICard, type Character, type InterestedIn, type SwipeDir } from "../types";
 
 const VISIBLE = 3; // cards rendered in the stack
@@ -59,13 +60,17 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
   // Gated on the auth uid — reads require auth, so fetching before the session
   // is ready would be denied (and return empty).
   const authUid = useAuth().user?.uid;
+  const myGender = profile?.gender;
   const [realCards, setRealCards] = useState<Character[]>([]);
   useEffect(() => {
     if (!authUid) return;
     loadCandidates()
-      .then((rows) => setRealCards(rows.map(profileToCard)))
+      // two-way interest: only show candidates who also want my gender
+      .then((rows) =>
+        setRealCards(rows.filter((r) => wantsGender(r, myGender)).map(profileToCard)),
+      )
       .catch(() => setRealCards([]));
-  }, [authUid]);
+  }, [authUid, myGender]);
 
   // economy: daily like quota + Süper Beğeni credits + Premium. Subscribe to the
   // raw fields so the action-bar counters re-render as they change.
@@ -98,6 +103,7 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
     }
   }, [likes, topTags]);
 
+  const blocked = useBlocks((s) => s.blocked);
   const pool = useMemo(() => {
     const want =
       interestedIn === "everyone"
@@ -105,10 +111,11 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
         : interestedIn === "women"
           ? "woman"
           : "man";
-    // real users first, AI seed fills the rest
-    const all = [...realCards, ...characters];
+    // real users first (minus blocked), AI seed fills the rest
+    const reals = realCards.filter((c) => !blocked.includes(c.id));
+    const all = [...reals, ...characters];
     return want ? all.filter((c) => c.gender === want) : all;
-  }, [interestedIn, realCards]);
+  }, [interestedIn, realCards, blocked]);
 
   // distance in km from the user to a character, or null when either side has
   // no location (real users may not have shared one yet)

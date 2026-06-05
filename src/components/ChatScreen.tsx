@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useMatches } from "../store/useMatches";
+import { useBlocks } from "../store/useBlocks";
 import { generateReply } from "../lib/reply";
-import { listenMessages, sendRealMessage } from "../lib/db";
+import { listenMessages, sendRealMessage, reportUser } from "../lib/db";
 import { currentUserId } from "../lib/session";
 import { isAICard } from "../types";
 
@@ -29,9 +30,13 @@ export default function ChatScreen({ characterId, onBack }: Props) {
   const startReply = useMatches((s) => s.startCharacterReply);
   const finishReply = useMatches((s) => s.finishCharacterReply);
   const setMessages = useMatches((s) => s.setMessages);
+  const removeMatch = useMatches((s) => s.removeMatch);
+  const block = useBlocks((s) => s.block);
 
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const matchId = conv?.matchId;
@@ -89,6 +94,22 @@ export default function ChatScreen({ characterId, onBack }: Props) {
     }
   }
 
+  async function handleBlock() {
+    setMenuOpen(false);
+    await block(character.id);
+    removeMatch(character.id);
+    onBack();
+  }
+
+  async function handleReport() {
+    setMenuOpen(false);
+    await reportUser(character.id, "uygunsuz içerik/davranış");
+    await block(character.id); // report implies block
+    removeMatch(character.id);
+    setToast("Şikayetin alındı, kullanıcı engellendi");
+    setTimeout(onBack, 1300);
+  }
+
   return (
     <div className="mx-auto flex h-full max-w-md flex-col px-2">
       {/* header */}
@@ -105,12 +126,51 @@ export default function ChatScreen({ characterId, onBack }: Props) {
           alt={character.name}
           className="h-10 w-10 rounded-full object-cover ring-2 ring-pink-400/50"
         />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate font-semibold leading-tight">{character.name}</p>
           <p className="text-xs text-emerald-400">
             {isReal ? "çevrimiçi" : "✨ AI Karakter · çevrimiçi"}
           </p>
         </div>
+
+        {/* safety menu — real matches only */}
+        {isReal && (
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="Seçenekler"
+              className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-lg ring-1 ring-white/15 active:scale-90"
+            >
+              ⋯
+            </button>
+            <AnimatePresence>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                    className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-2xl bg-[#1c1230] ring-1 ring-white/15 backdrop-blur-xl"
+                  >
+                    <button
+                      onClick={handleReport}
+                      className="block w-full px-4 py-3 text-left text-sm text-amber-300 active:bg-white/10"
+                    >
+                      🚩 Şikayet et
+                    </button>
+                    <button
+                      onClick={handleBlock}
+                      className="block w-full border-t border-white/10 px-4 py-3 text-left text-sm text-rose-400 active:bg-white/10"
+                    >
+                      🚫 Engelle
+                    </button>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </header>
 
       {/* messages */}
@@ -175,6 +235,19 @@ export default function ChatScreen({ characterId, onBack }: Props) {
           Tüm yanıtlar yapay zekâdır.
         </p>
       )}
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="pointer-events-none fixed bottom-24 left-1/2 z-[170] -translate-x-1/2 rounded-full bg-rose-500/90 px-5 py-2.5 text-sm font-semibold shadow-lg"
+          >
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -90,6 +90,47 @@ export async function loadCandidates(): Promise<PublicProfile[]> {
     .filter((p) => p.uid && p.uid !== me);
 }
 
+// ── safety: block & report ───────────────────────────────────────
+/** Block a user: hides them from discovery and removes the match locally.
+ *  Stored privately under users/{me}/blocks/{otherUid}. */
+export async function blockUser(otherUid: string): Promise<void> {
+  if (!db) return;
+  const me = uid();
+  if (!me) return;
+  try {
+    await setDoc(doc(db, "users", me, "blocks", otherUid), { createdAt: Date.now() });
+  } catch (err) {
+    console.warn("[firebase] blockUser failed:", err);
+  }
+}
+
+/** Set of uids I've blocked (for filtering discovery + matches). */
+export async function loadBlocks(): Promise<string[]> {
+  if (!db) return [];
+  const me = uid();
+  if (!me) return [];
+  try {
+    const snap = await getDocs(collection(db, "users", me, "blocks"));
+    return snap.docs.map((d) => d.id);
+  } catch {
+    return [];
+  }
+}
+
+/** File a report for moderation review (write-only for the reporter). */
+export async function reportUser(otherUid: string, reason: string): Promise<void> {
+  if (!db) return;
+  const me = uid();
+  if (!me) return;
+  try {
+    await addDoc(collection(db, "reports"), {
+      reporter: me, reported: otherUid, reason, createdAt: Date.now(),
+    });
+  } catch (err) {
+    console.warn("[firebase] reportUser failed:", err);
+  }
+}
+
 // ── likes & reciprocal matches (real user↔user) ──────────────────
 export type LikeKind = "like" | "superlike";
 

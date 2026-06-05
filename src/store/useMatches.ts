@@ -31,6 +31,8 @@ type MatchesState = {
   addRealMatch: (character: Character, matchId: string) => void;
   /** replace a conversation's messages (used by the live thread listener) */
   setMessages: (id: string, messages: Message[]) => void;
+  /** drop a conversation locally (e.g. after blocking the user) */
+  removeMatch: (id: string) => void;
   /** fill the pending opener once the style-driven line is generated */
   resolveOpener: (id: string, text: string) => void;
   /** replace state with conversations loaded from Firestore */
@@ -88,6 +90,13 @@ export const useMatches = create<MatchesState>((set, get) => ({
       const conv = s.conversations[id];
       if (!conv) return s;
       return { conversations: { ...s.conversations, [id]: { ...conv, messages } } };
+    }),
+  removeMatch: (id) =>
+    set((s) => {
+      if (!s.conversations[id]) return s;
+      const conversations = { ...s.conversations };
+      delete conversations[id];
+      return { conversations, order: s.order.filter((x) => x !== id) };
     }),
   resolveOpener: (id, text) => {
     const conv = get().conversations[id];
