@@ -17,3 +17,23 @@ export function distanceKm(
 function toRad(d: number): number {
   return (d * Math.PI) / 180;
 }
+
+/**
+ * Coarsen a precise location before exposing it publicly. Snaps to a ~2 km grid
+ * and adds a STABLE per-user offset (seeded by uid) within the cell, so the
+ * displayed distance stays roughly right but the exact point (home) is never
+ * revealed and doesn't drift between writes.
+ */
+export function coarsenLocation(
+  lat: number,
+  lng: number,
+  seed: string,
+): { lat: number; lng: number } {
+  const GRID = 0.02; // ~2.2 km
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) % 100000;
+  const jLat = ((h % 1000) / 1000 - 0.5) * GRID;
+  const jLng = ((Math.floor(h / 1000) % 1000) / 1000 - 0.5) * GRID;
+  const snap = (v: number) => Math.round(v / GRID) * GRID;
+  return { lat: snap(lat) + jLat, lng: snap(lng) + jLng };
+}

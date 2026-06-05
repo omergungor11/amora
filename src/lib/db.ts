@@ -6,6 +6,7 @@ import {
 import type { UserProfile, SwipeDir, PublicProfile } from "../types";
 import { normalizeProfile } from "./profile";
 import { ageFromDate } from "./astro";
+import { coarsenLocation } from "./geo";
 
 /**
  * Firestore persistence layer. Every function is null-safe: when Firebase isn't
@@ -37,10 +38,22 @@ export async function saveProfile(profile: UserProfile): Promise<void> {
 }
 
 // ── public profiles (real user↔user discovery) ───────────────────
+/** Profile fields that appear in the public mirror — used to skip needless
+ *  public writes when only private/discovery fields change. */
+export const PUBLIC_PROFILE_FIELDS: (keyof UserProfile)[] = [
+  "name", "birthDate", "gender", "interestedIn", "photos", "bio",
+  "lat", "lng", "locationLabel", "interests",
+  "smoking", "drinking", "exercise", "diet",
+  "politics", "religion", "kids", "cats", "dogs", "socialEnergy",
+];
+
 /** Card-safe projection written to the public `profiles/{uid}` collection. */
 function toPublic(p: UserProfile, id: string): PublicProfile | null {
   const age = ageFromDate(p.birthDate);
   if (age == null || !p.gender) return null; // not discoverable yet
+  // never expose the exact point — coarsen to a ~2 km grid for discovery
+  const loc =
+    p.lat != null && p.lng != null ? coarsenLocation(p.lat, p.lng, id) : null;
   return {
     uid: id,
     name: p.name,
@@ -49,8 +62,8 @@ function toPublic(p: UserProfile, id: string): PublicProfile | null {
     interestedIn: p.interestedIn,
     photos: p.photos ?? [],
     bio: p.bio,
-    lat: p.lat,
-    lng: p.lng,
+    lat: loc?.lat,
+    lng: loc?.lng,
     locationLabel: p.locationLabel,
     interests: p.interests,
     traits: {
@@ -91,27 +104,29 @@ export async function loadCandidates(): Promise<PublicProfile[]> {
 }
 
 // ── safety: block & report ───────────────────────────────────────
-/** Block a user: hides them from discovery and removes the match locally.
- *  Stored privately under users/{me}/blocks/{otherUid}. */
+/** Block a user. Stored top-level as blocks/{me}_{otherUid} so security rules
+ *  can also stop the blocked user from writing into the shared thread. */
 export async function blockUser(otherUid: string): Promise<void> {
   if (!db) return;
   const me = uid();
   if (!me) return;
   try {
-    await setDoc(doc(db, "users", me, "blocks", otherUid), { createdAt: Date.now() });
+    await setDoc(doc(db, "blocks", `${me}_${otherUid}`), {
+      blocker: me, blocked: otherUid, createdAt: Date.now(),
+    });
   } catch (err) {
     console.warn("[firebase] blockUser failed:", err);
   }
 }
 
-/** Set of uids I've blocked (for filtering discovery + matches). */
+/** Uids I've blocked (for filtering discovery + matches). */
 export async function loadBlocks(): Promise<string[]> {
   if (!db) return [];
   const me = uid();
   if (!me) return [];
   try {
-    const snap = await getDocs(collection(db, "users", me, "blocks"));
-    return snap.docs.map((d) => d.id);
+    const snap = await getDocs(query(collection(db, "blocks"), where("blocker", "==", me)));
+    return snap.docs.map((d) => d.data().blocked as string);
   } catch {
     return [];
   }
@@ -228,36 +243,47 @@ export function listenMessages(
   );
 }
 
-/** Write a message into a shared match thread. */
-export async function sendRealMessage(matchId: string, text: string): Promise<void> {
+/** Write a message into a shared match thread. `toUid` (the recipient) lets the
+ *  security rules block delivery when the recipient has blocked the sender. */
+export async function sendRealMessage(
+  matchId: string,
+  text: string,
+  toUid: string,
+): Promise<void> {
   const fdb = db;
   const me = uid();
   if (!fdb || !me) return;
   try {
     await addDoc(collection(fdb, "matches", matchId, "messages"), {
-      from: me, text, createdAt: Date.now(),
+      from: me, to: toUid, text, createdAt: Date.now(),
     });
   } catch (err) {
     console.warn("[firebase] sendRealMessage failed:", err);
   }
 }
 
-/** Public profiles of everyone who has liked me (powers "Seni Beğenenler"). */
-export async function loadLikedBy(): Promise<PublicProfile[]> {
+export type Liker = { profile: PublicProfile; kind: LikeKind };
+
+/** Everyone who has liked me + the like kind (powers "Seni Beğenenler").
+ *  Super-likes carry through so the recipient sees they were super-liked. */
+export async function loadLikedBy(): Promise<Liker[]> {
   const fdb = db;
   if (!fdb) return [];
   const me = uid();
   if (!me) return [];
   try {
     const snap = await getDocs(query(collection(fdb, "likes"), where("to", "==", me)));
-    const fromIds = snap.docs.map((d) => d.data().from as string);
-    const profiles = await Promise.all(
-      fromIds.map(async (fid) => {
-        const s = await getDoc(doc(fdb, "profiles", fid));
-        return s.exists() ? (s.data() as PublicProfile) : null;
+    const rows = snap.docs.map((d) => ({
+      from: d.data().from as string,
+      kind: (d.data().kind as LikeKind) ?? "like",
+    }));
+    const likers = await Promise.all(
+      rows.map(async (r) => {
+        const s = await getDoc(doc(fdb, "profiles", r.from));
+        return s.exists() ? { profile: s.data() as PublicProfile, kind: r.kind } : null;
       }),
     );
-    return profiles.filter((p): p is PublicProfile => p !== null);
+    return likers.filter((l): l is Liker => l !== null);
   } catch (err) {
     console.warn("[firebase] loadLikedBy failed:", err);
     return [];

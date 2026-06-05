@@ -48,11 +48,24 @@ service cloud.firestore {
         allow read: if request.auth != null &&
           request.auth.uid in
             get(/databases/$(database)/documents/matches/$(matchId)).data.users;
+        // sender must be a participant, address a participant, and not be
+        // blocked by the recipient (blocks/{recipient}_{sender})
         allow create: if request.auth != null &&
           request.resource.data.from == request.auth.uid &&
           request.auth.uid in
-            get(/databases/$(database)/documents/matches/$(matchId)).data.users;
+            get(/databases/$(database)/documents/matches/$(matchId)).data.users &&
+          request.resource.data.to in
+            get(/databases/$(database)/documents/matches/$(matchId)).data.users &&
+          !exists(/databases/$(database)/documents/blocks/$(request.resource.data.to + '_' + request.auth.uid));
       }
+    }
+
+    // ── blocks (top-level so message rules can check them) ────────
+    match /blocks/{id} {
+      allow read, delete: if request.auth != null &&
+        resource.data.blocker == request.auth.uid;
+      allow create: if request.auth != null &&
+        request.resource.data.blocker == request.auth.uid;
     }
 
     // ── reports (moderation) — reporter writes; no client reads ───

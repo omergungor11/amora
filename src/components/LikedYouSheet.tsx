@@ -32,16 +32,18 @@ export default function LikedYouSheet({ onClose, onUpsell, onOpenChat }: Props) 
   const hasMatch = useMatches((s) => s.hasMatch);
   const isBlocked = useBlocks((s) => s.isBlocked);
   const authUid = useAuth().user?.uid;
-  const [likers, setLikers] = useState<Character[]>([]);
+  const [likers, setLikers] = useState<{ c: Character; sup: boolean }[]>([]);
 
   useEffect(() => {
     if (!authUid) return;
     loadLikedBy()
-      .then((profs) =>
+      .then((rows) =>
         setLikers(
-          profs
-            .map(profileToCard)
-            .filter((c) => !hasMatch(c.id) && !isBlocked(c.id))
+          rows
+            .map((r) => ({ c: profileToCard(r.profile), sup: r.kind === "superlike" }))
+            .filter(({ c }) => !hasMatch(c.id) && !isBlocked(c.id))
+            // super-likers first, so the paid signal stands out
+            .sort((a, b) => Number(b.sup) - Number(a.sup))
             .slice(0, MAX_LIKERS),
         ),
       )
@@ -57,7 +59,7 @@ export default function LikedYouSheet({ onClose, onUpsell, onOpenChat }: Props) 
       onClose();
       if (matchId) onOpenChat(c.id);
     });
-    setLikers((cur) => cur.filter((x) => x.id !== c.id));
+    setLikers((cur) => cur.filter((x) => x.c.id !== c.id));
   }
 
   return (
@@ -93,11 +95,13 @@ export default function LikedYouSheet({ onClose, onUpsell, onOpenChat }: Props) 
             </p>
           ) : (
             <div className="mt-4 grid grid-cols-2 gap-3">
-              {likers.map((c) => (
+              {likers.map(({ c, sup }) => (
                 <button
                   key={c.id}
                   onClick={() => (premium ? likeBack(c) : onUpsell())}
-                  className="relative aspect-[3/4] overflow-hidden rounded-2xl ring-1 ring-white/10 active:scale-95"
+                  className={`relative aspect-[3/4] overflow-hidden rounded-2xl ring-1 active:scale-95 ${
+                    sup ? "ring-sky-400/70" : "ring-white/10"
+                  }`}
                 >
                   <img
                     src={characterPhotos(c)[0]}
@@ -106,6 +110,11 @@ export default function LikedYouSheet({ onClose, onUpsell, onOpenChat }: Props) 
                     style={{ objectPosition: "center 25%" }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                  {sup && (
+                    <div className="absolute left-2 top-2 rounded-full bg-sky-500/40 px-2 py-0.5 text-[11px] font-bold text-sky-100 ring-1 ring-sky-300/50 backdrop-blur-md">
+                      ⭐ Süper
+                    </div>
+                  )}
                   <div className="absolute right-2 top-2 rounded-full bg-pink-500/30 px-2 py-0.5 text-[11px] font-semibold text-pink-100 ring-1 ring-pink-300/40 backdrop-blur-md">
                     %{compatPercent(profile!, c)}
                   </div>

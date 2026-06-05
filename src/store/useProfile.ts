@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { UserProfile } from "../types";
-import { saveProfile, savePublicProfile } from "../lib/db";
+import { saveProfile, savePublicProfile, PUBLIC_PROFILE_FIELDS } from "../lib/db";
 import { normalizeProfile } from "../lib/profile";
 
 /**
@@ -31,7 +31,11 @@ export const useProfile = create<ProfileState>()(
           if (!s.profile) return s;
           const next = { ...s.profile, ...patch };
           void saveProfile(next);
-          void savePublicProfile(next);
+          // only re-mirror the public card when a public field actually changed
+          // (skip discovery-only tweaks like distance/age range/filters)
+          if (Object.keys(patch).some((k) => PUBLIC_PROFILE_FIELDS.includes(k as keyof typeof next))) {
+            void savePublicProfile(next);
+          }
           return { profile: next };
         }),
       clear: () => set({ profile: null }),

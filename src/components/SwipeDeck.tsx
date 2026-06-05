@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import SwipeCard, { type SwipeCardHandle } from "./SwipeCard";
 import ActionBar from "./ActionBar";
@@ -62,15 +62,33 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
   const authUid = useAuth().user?.uid;
   const myGender = profile?.gender;
   const [realCards, setRealCards] = useState<Character[]>([]);
-  useEffect(() => {
+
+  // pull other users' public profiles → deck cards (two-way interest gated)
+  const refreshCandidates = useCallback(() => {
     if (!authUid) return;
     loadCandidates()
-      // two-way interest: only show candidates who also want my gender
       .then((rows) =>
         setRealCards(rows.filter((r) => wantsGender(r, myGender)).map(profileToCard)),
       )
       .catch(() => setRealCards([]));
   }, [authUid, myGender]);
+
+  useEffect(() => {
+    refreshCandidates();
+  }, [refreshCandidates]);
+
+  // refetch when the user returns to the app (no live-refresh otherwise)
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshCandidates();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refreshCandidates);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refreshCandidates);
+    };
+  }, [refreshCandidates]);
 
   // economy: daily like quota + Süper Beğeni credits + Premium. Subscribe to the
   // raw fields so the action-bar counters re-render as they change.
@@ -246,7 +264,10 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
                 {currentInsight ?? "Yeni karakterler yakında geliyor."}
               </p>
               <button
-                onClick={() => clearSeen()}
+                onClick={() => {
+                  clearSeen();
+                  refreshCandidates();
+                }}
                 className="mt-6 rounded-full bg-white/10 px-6 py-3 ring-1 ring-white/15 active:scale-95"
               >
                 Yeniden Karıştır

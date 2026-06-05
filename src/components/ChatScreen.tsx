@@ -9,6 +9,14 @@ import { isAICard } from "../types";
 
 type Props = { characterId: string; onBack: () => void };
 
+const REPORT_REASONS = [
+  "Sahte profil",
+  "Uygunsuz içerik",
+  "Taciz / tehdit",
+  "Spam / dolandırıcılık",
+  "Diğer",
+];
+
 function TypingDots() {
   return (
     <div className="flex gap-1 px-1 py-1">
@@ -36,6 +44,7 @@ export default function ChatScreen({ characterId, onBack }: Props) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [reportMode, setReportMode] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -72,7 +81,7 @@ export default function ChatScreen({ characterId, onBack }: Props) {
 
     // real user↔user: write to the shared thread; the listener reflects it
     if (matchId) {
-      await sendRealMessage(matchId, text);
+      await sendRealMessage(matchId, text, character.id);
       return;
     }
 
@@ -101,9 +110,10 @@ export default function ChatScreen({ characterId, onBack }: Props) {
     onBack();
   }
 
-  async function handleReport() {
+  async function handleReport(reason: string) {
     setMenuOpen(false);
-    await reportUser(character.id, "uygunsuz içerik/davranış");
+    setReportMode(false);
+    await reportUser(character.id, reason);
     await block(character.id); // report implies block
     removeMatch(character.id);
     setToast("Şikayetin alındı, kullanıcı engellendi");
@@ -137,7 +147,10 @@ export default function ChatScreen({ characterId, onBack }: Props) {
         {isReal && (
           <div className="relative">
             <button
-              onClick={() => setMenuOpen((v) => !v)}
+              onClick={() => {
+                setMenuOpen((v) => !v);
+                setReportMode(false);
+              }}
               aria-label="Seçenekler"
               className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-lg ring-1 ring-white/15 active:scale-90"
             >
@@ -146,25 +159,50 @@ export default function ChatScreen({ characterId, onBack }: Props) {
             <AnimatePresence>
               {menuOpen && (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setReportMode(false);
+                    }}
+                  />
                   <motion.div
                     initial={{ opacity: 0, y: -6, scale: 0.96 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.96 }}
-                    className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-2xl bg-[#1c1230] ring-1 ring-white/15 backdrop-blur-xl"
+                    className="absolute right-0 top-11 z-20 w-52 overflow-hidden rounded-2xl bg-[#1c1230] ring-1 ring-white/15 backdrop-blur-xl"
                   >
-                    <button
-                      onClick={handleReport}
-                      className="block w-full px-4 py-3 text-left text-sm text-amber-300 active:bg-white/10"
-                    >
-                      🚩 Şikayet et
-                    </button>
-                    <button
-                      onClick={handleBlock}
-                      className="block w-full border-t border-white/10 px-4 py-3 text-left text-sm text-rose-400 active:bg-white/10"
-                    >
-                      🚫 Engelle
-                    </button>
+                    {reportMode ? (
+                      <>
+                        <div className="px-4 pb-1 pt-3 text-xs font-semibold text-white/40">
+                          Şikayet sebebi
+                        </div>
+                        {REPORT_REASONS.map((r) => (
+                          <button
+                            key={r}
+                            onClick={() => handleReport(r)}
+                            className="block w-full px-4 py-2.5 text-left text-sm text-amber-300 active:bg-white/10"
+                          >
+                            {r}
+                          </button>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setReportMode(true)}
+                          className="block w-full px-4 py-3 text-left text-sm text-amber-300 active:bg-white/10"
+                        >
+                          🚩 Şikayet et
+                        </button>
+                        <button
+                          onClick={handleBlock}
+                          className="block w-full border-t border-white/10 px-4 py-3 text-left text-sm text-rose-400 active:bg-white/10"
+                        >
+                          🚫 Engelle
+                        </button>
+                      </>
+                    )}
                   </motion.div>
                 </>
               )}
