@@ -94,8 +94,35 @@ export default function Profile() {
         )}
       </motion.div>
 
-      {/* editable sections (all optional) */}
+      {/* editable sections */}
       <div className="mt-5 space-y-4">
+        {/* gender — required for matching (others' "kimi göster" filter) */}
+        <Section title="Cinsiyetin" icon="👤">
+          {!profile.gender && (
+            <p className="-mt-1 mb-1 rounded-xl bg-amber-500/15 px-3 py-2 text-xs text-amber-200 ring-1 ring-amber-400/20">
+              Eşleşebilmen için cinsiyetini seçmen gerekiyor.
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { value: "woman", label: "Kadın" },
+              { value: "man", label: "Erkek" },
+            ] as const).map((g) => (
+              <button
+                key={g.value}
+                onClick={() => update({ gender: g.value })}
+                className={`rounded-xl px-3 py-2.5 text-sm ring-1 transition ${
+                  profile.gender === g.value
+                    ? "bg-pink-500/30 ring-pink-400/70"
+                    : "bg-white/5 ring-white/10"
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </Section>
+
         <Section title="Fotoğraflar" icon="📸">
           <PhotoGrid
             photos={profile.photos}
@@ -260,8 +287,8 @@ export default function Profile() {
             🚪 Profili sıfırla / çıkış
           </button>
           <p className="px-1 pt-1 text-[11px] leading-relaxed text-white/40">
-            Tüm karakterler ve yanıtlar yapay zekâdır. Amora 18 yaş ve üzeri
-            içindir. Verilerin yalnızca bu cihazda saklanır.
+            ✨ ile işaretli profiller yapay zekâdır. Amora 18 yaş ve üzeri
+            içindir. Profilin eşleşme için diğer kullanıcılarla paylaşılır.
           </p>
         </Section>
       </div>
