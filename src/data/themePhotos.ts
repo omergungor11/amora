@@ -48,6 +48,8 @@ const url = (id: string) =>
 
 /** Portrait + up to two distinct themed shots from the character's top tags. */
 export function characterPhotos(c: Character): string[] {
+  // real users carry their own uploaded photos — show those as-is
+  if (c.photos && c.photos.length > 0) return c.photos;
   const themed: string[] = [];
   for (const tag of c.tags) {
     const id = THEME[tag];

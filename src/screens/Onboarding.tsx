@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { useProfile } from "../store/useProfile";
 import { ageFromDate, zodiac } from "../lib/astro";
 import { PhotoGrid } from "../components/profile/PhotoGrid";
-import type { InterestedIn } from "../types";
+import type { Gender, InterestedIn } from "../types";
 
 const options: { value: InterestedIn; label: string }[] = [
   { value: "women", label: "Kadınlar" },
@@ -11,22 +11,29 @@ const options: { value: InterestedIn; label: string }[] = [
   { value: "everyone", label: "Herkes" },
 ];
 
+const genders: { value: Gender; label: string }[] = [
+  { value: "woman", label: "Kadın" },
+  { value: "man", label: "Erkek" },
+];
+
 export default function Onboarding() {
   const create = useProfile((s) => s.create);
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [gender, setGender] = useState<Gender | null>(null);
   const [interestedIn, setInterestedIn] = useState<InterestedIn>("women");
 
   const age = ageFromDate(birthDate);
   const sign = zodiac(birthDate);
   const tooYoung = age !== null && age < 18;
   const canContinue =
-    name.trim().length > 0 && photos.length > 0 && age !== null && !tooYoung;
+    name.trim().length > 0 && photos.length > 0 && age !== null && !tooYoung &&
+    gender !== null;
 
   function start() {
-    if (!canContinue) return;
-    create({ name: name.trim(), birthDate, photos, interestedIn });
+    if (!canContinue || !gender) return;
+    create({ name: name.trim(), birthDate, gender, photos, interestedIn });
   }
 
   return (
@@ -102,6 +109,23 @@ export default function Onboarding() {
         </p>
       )}
 
+      <label className="mt-5 block text-sm text-white/60">Cinsiyetin *</label>
+      <div className="mt-1 grid grid-cols-2 gap-2">
+        {genders.map((g) => (
+          <button
+            key={g.value}
+            onClick={() => setGender(g.value)}
+            className={`rounded-2xl px-3 py-3 text-sm ring-1 transition ${
+              gender === g.value
+                ? "bg-pink-500/30 ring-pink-400/70"
+                : "bg-white/5 ring-white/10"
+            }`}
+          >
+            {g.label}
+          </button>
+        ))}
+      </div>
+
       <label className="mt-5 block text-sm text-white/60">İlgilendiğin</label>
       <div className="mt-1 grid grid-cols-3 gap-2">
         {options.map((o) => (
@@ -129,7 +153,8 @@ export default function Onboarding() {
       </motion.button>
 
       <p className="mt-4 text-center text-xs text-white/40">
-        * zorunlu alanlar · Tüm profiller yapay zekâdır. 18 yaş ve üzeri içindir.
+        * zorunlu alanlar · 18 yaş ve üzeri içindir. Deck'te ✨ ile işaretli
+        profiller yapay zekâdır.
       </p>
     </motion.div>
   );

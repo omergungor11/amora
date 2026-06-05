@@ -15,7 +15,10 @@ import {
   scoreProfileMatch, compatPercent, hasSignal, compatBreakdown, passesFilters,
 } from "../lib/compatibility";
 import { distanceKm as geoDistance } from "../lib/geo";
-import type { Character, InterestedIn, SwipeDir } from "../types";
+import { loadCandidates, sendLike } from "../lib/db";
+import { useAuth } from "../lib/useAuth";
+import { profileToCard } from "../lib/deck";
+import { isAICard, type Character, type InterestedIn, type SwipeDir } from "../types";
 
 const VISIBLE = 3; // cards rendered in the stack
 
@@ -49,6 +52,19 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
   const resolveOpener = useMatches((s) => s.resolveOpener);
   const profile = useProfile((s) => s.profile);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
+
+  // real user↔user discovery: pull other users' public profiles and adapt them
+  // into deck cards, merged with the AI seed so the deck is never empty.
+  // Gated on the auth uid — reads require auth, so fetching before the session
+  // is ready would be denied (and return empty).
+  const authUid = useAuth().user?.uid;
+  const [realCards, setRealCards] = useState<Character[]>([]);
+  useEffect(() => {
+    if (!authUid) return;
+    loadCandidates()
+      .then((rows) => setRealCards(rows.map(profileToCard)))
+      .catch(() => setRealCards([]));
+  }, [authUid]);
 
   // economy: daily like quota + Süper Beğeni credits + Premium. Subscribe to the
   // raw fields so the action-bar counters re-render as they change.
@@ -88,16 +104,23 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
         : interestedIn === "women"
           ? "woman"
           : "man";
-    return want ? characters.filter((c) => c.gender === want) : characters;
-  }, [interestedIn]);
+    // real users first, AI seed fills the rest
+    const all = [...realCards, ...characters];
+    return want ? all.filter((c) => c.gender === want) : all;
+  }, [interestedIn, realCards]);
 
-  // distance in km from the user to a character, or null when no location set
+  // distance in km from the user to a character, or null when either side has
+  // no location (real users may not have shared one yet)
   const userLoc =
     profile?.lat != null && profile?.lng != null
       ? { lat: profile.lat, lng: profile.lng }
       : null;
+  function coordsOf(c: Character): { lat: number; lng: number } | null {
+    return c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : null;
+  }
   function distanceOf(c: Character): number | null {
-    return userLoc ? Math.round(geoDistance(userLoc, c)) : null;
+    const cc = coordsOf(c);
+    return userLoc && cc ? Math.round(geoDistance(userLoc, cc)) : null;
   }
 
   // Matching engine: HARD filters gate the pool (gender ✓, age, distance);
@@ -110,7 +133,8 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
     const eligible = pool.filter((c) => {
       if (seen.includes(c.id)) return false;
       if (c.age < ageMin || c.age > ageMax) return false;
-      if (userLoc && geoDistance(userLoc, c) > maxKm) return false;
+      const cc = coordsOf(c);
+      if (userLoc && cc && geoDistance(userLoc, cc) > maxKm) return false;
       // Premium advanced filters (values/lifestyle/interests) as a hard gate
       if (premium && profile && !passesFilters(profile, c)) return false;
       return true;
@@ -119,7 +143,8 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
     return eligible
       .map((c) => {
         const compat = profile ? scoreProfileMatch(profile, c) * 0.7 : 0;
-        const d = userLoc ? geoDistance(userLoc, c) : null;
+        const cc = coordsOf(c);
+        const d = userLoc && cc ? geoDistance(userLoc, cc) : null;
         const closeness = d != null ? (1 - Math.min(d, maxKm) / maxKm) * 2 : 0;
         return { c, key: compat + affinity(c) + closeness + jitter(c.id) };
       })
@@ -141,7 +166,21 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
     if (dir === "like") spendLike();
     else if (dir === "superlike") spendSuperLike();
     record(char, dir); // updates taste + adds to `seen` + persists the swipe
-    // AI characters: superlike always matches, like matches ~60%
+
+    // ── real user: write a directional like; match only if reciprocal ──
+    if (!isAICard(char)) {
+      if (dir === "like" || dir === "superlike") {
+        sendLike(char.id, dir).then((matchId) => {
+          if (!matchId) return; // they haven't liked back (yet)
+          addMatch(char);
+          resolveOpener(char.id, "Eşleştiniz! 🎉 İlk mesajı sen at 👋");
+          setMatched(char);
+        });
+      }
+      return;
+    }
+
+    // ── AI seed: simulated match + Gemini opener (superlike always, like ~60%) ──
     const isMatch = dir === "superlike" || (dir === "like" && Math.random() < 0.6);
     if (isMatch) {
       addMatch(char);

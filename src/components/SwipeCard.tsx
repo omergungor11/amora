@@ -7,7 +7,7 @@ import {
 } from "motion/react";
 import type { PanInfo } from "motion/react";
 import { useImperativeHandle, useMemo, useState, type Ref } from "react";
-import type { Character, SwipeDir } from "../types";
+import { isAICard, type Character, type SwipeDir } from "../types";
 import type { CompatReason } from "../lib/compatibility";
 import { characterPhotos } from "../data/themePhotos";
 
@@ -175,14 +175,16 @@ export default function SwipeCard({
         {/* readability gradient */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
 
-        {/* AI badge (regulatory: always disclose) */}
-        <div className="absolute left-4 top-4 flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1 text-xs font-medium backdrop-blur-md ring-1 ring-white/20">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          </span>
-          ✨ AI Karakter
-        </div>
+        {/* AI badge (regulatory: disclose AI seed only — real users never get it) */}
+        {isAICard(character) && (
+          <div className="absolute left-4 top-4 flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1 text-xs font-medium backdrop-blur-md ring-1 ring-white/20">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            </span>
+            ✨ AI Karakter
+          </div>
+        )}
 
         {/* compatibility hint (top-right) — tap to see why; top card only */}
         {active && typeof compat === "number" && compat >= 70 && (

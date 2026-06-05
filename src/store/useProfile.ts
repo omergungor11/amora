@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { UserProfile } from "../types";
-import { saveProfile } from "../lib/db";
+import { saveProfile, savePublicProfile } from "../lib/db";
 import { normalizeProfile } from "../lib/profile";
 
 /**
@@ -23,13 +23,15 @@ export const useProfile = create<ProfileState>()(
       profile: null,
       create: (p) => {
         set({ profile: p });
-        void saveProfile(p); // write-through to Firestore (no-op if disabled)
+        void saveProfile(p); // private write-through (no-op if disabled)
+        void savePublicProfile(p); // public card mirror for discovery
       },
       update: (patch) =>
         set((s) => {
           if (!s.profile) return s;
           const next = { ...s.profile, ...patch };
           void saveProfile(next);
+          void savePublicProfile(next);
           return { profile: next };
         }),
       clear: () => set({ profile: null }),

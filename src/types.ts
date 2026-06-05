@@ -50,13 +50,22 @@ export type Character = {
   style: CharacterStyle;
   /** compatibility attributes for profile↔character matching */
   traits: CharacterTraits;
-  /** coordinates for real distance calc */
-  lat: number;
-  lng: number;
+  /** coordinates for real distance calc (optional for real users w/o location) */
+  lat?: number;
+  lng?: number;
   photo: string;
+  /** real users carry their own photo array; AI seed derives themed shots */
+  photos?: string[];
   /** accent color used in the card gradient */
   accent: string;
+  /** false for real users; AI seed characters are AI (undefined ⇒ AI) */
+  isAI?: boolean;
 };
+
+/** A deck card is an AI seed unless explicitly marked as a real user. */
+export function isAICard(c: Character): boolean {
+  return c.isAI !== false;
+}
 
 export type SwipeDir = "like" | "pass" | "superlike";
 
@@ -78,6 +87,8 @@ export type UserProfile = {
   // ── required ──
   name: string;
   birthDate: string; // ISO yyyy-mm-dd
+  /** the user's own gender — needed so others' `interestedIn` can match them */
+  gender: Gender;
   /** 1–4 photos (downscaled data URLs); photos[0] is the primary */
   photos: string[];
   interestedIn: InterestedIn;
@@ -137,3 +148,27 @@ export type UserProfile = {
 
 /** Advanced-filter keys gated behind Premium (P3). */
 export type FilterKey = keyof NonNullable<UserProfile["filters"]>;
+
+/**
+ * Public, card-safe projection of a user — the only profile data other users
+ * can read (see firestore.rules `profiles/{uid}`). Excludes exact birthDate and
+ * any private prefs/economy; carries just what the deck card + compatibility
+ * scoring need. AI seed characters are adapted into the same deck via
+ * `profileToCard`, but they are NOT stored here.
+ */
+export type PublicProfile = {
+  uid: string;
+  name: string;
+  age: number;
+  gender: Gender;
+  interestedIn: InterestedIn;
+  photos: string[];
+  bio?: string;
+  lat?: number;
+  lng?: number;
+  locationLabel?: string;
+  interests?: string[];
+  traits: CharacterTraits;
+  isAI: boolean;
+  updatedAt?: number;
+};

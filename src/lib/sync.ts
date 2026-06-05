@@ -1,5 +1,6 @@
 import {
-  loadProfile, saveProfile, loadSwipes, loadMatches, loadMessages, loadEconomy,
+  loadProfile, saveProfile, savePublicProfile, loadSwipes, loadMatches,
+  loadMessages, loadEconomy,
 } from "./db";
 import { useProfile } from "../store/useProfile";
 import { useTaste } from "../store/useTaste";
@@ -24,7 +25,10 @@ export async function hydrateFromFirebase(): Promise<void> {
       useProfile.setState({ profile: remote });
     } else {
       const local = useProfile.getState().profile;
-      if (local) await saveProfile(local);
+      if (local) {
+        await saveProfile(local);
+        await savePublicProfile(local);
+      }
     }
 
     // swipes → taste + seen
