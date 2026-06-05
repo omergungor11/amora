@@ -52,13 +52,23 @@ Verified E2E with two anonymous sessions (A♀→♂, B♂→♀, both 19 so AI 
 age-filtered out): B sees A, B likes (no match), A sees B, A likes → mutual
 match modal; 0 console errors.
 
-### R3 — Real two-way messaging
-- [ ] Shared `matches/{matchId}/messages` subcollection (both participants
-      read/write); message `{ from, text, createdAt }`.
-- [ ] `onSnapshot` listeners for live updates (no polling; free tier OK).
-- [ ] Refactor `useMatches`/`db` to support shared threads keyed by matchId,
-      while AI-seed conversations keep the per-user Gemini path.
-- [ ] Chat screen: real match → human messaging; AI seed → Gemini as today.
+### R3 — Real two-way messaging  ✅ DONE
+- [x] Shared `matches/{matchId}/messages` subcollection (both participants
+      read/write); `sendRealMessage` writes `{ from, text, createdAt }`.
+- [x] `onSnapshot` listeners: `listenMessages` (live thread) + `listenRealMatches`
+      (live matches). `startMatchSync` wires the latter at startup → both
+      participants see the match with NO reload (first-liker visibility fixed).
+- [x] `useMatches` gains `matchId` on Conversation + `addRealMatch`/`setMessages`;
+      AI-seed conversations keep the per-user Gemini path.
+- [x] ChatScreen branches: real match → shared-thread human messaging (no AI
+      badge/footer, "İlk mesajı sen at" empty state); AI seed → Gemini as before.
+
+Verified E2E (two sessions): mutual match → both see it live → A sends → B sees
+it live → B replies → A sees it live. Real card shows no AI badge.
+
+> Test note: accumulated anon test profiles pollute discovery (client-side
+> filter). Tests isolate a run via a distinctive age band; production is
+> unaffected. A periodic cleanup / TTL on stale anon profiles is an R4 item.
 
 ### R4 — Safety & scale
 - [ ] Report / block; hide blocked users from discovery.

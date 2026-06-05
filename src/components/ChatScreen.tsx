@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useMatches } from "../store/useMatches";
 import { generateReply } from "../lib/reply";
+import { listenMessages, sendRealMessage } from "../lib/db";
+import { currentUserId } from "../lib/session";
+import { isAICard } from "../types";
 
 type Props = { characterId: string; onBack: () => void };
 
@@ -25,10 +28,27 @@ export default function ChatScreen({ characterId, onBack }: Props) {
   const appendUser = useMatches((s) => s.appendUser);
   const startReply = useMatches((s) => s.startCharacterReply);
   const finishReply = useMatches((s) => s.finishCharacterReply);
+  const setMessages = useMatches((s) => s.setMessages);
 
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const matchId = conv?.matchId;
+  const isReal = conv ? !isAICard(conv.character) : false;
+
+  // real match → live-sync the shared thread from Firestore (both sides)
+  useEffect(() => {
+    if (!matchId) return;
+    const me = currentUserId();
+    return listenMessages(matchId, (rows) => {
+      setMessages(characterId, rows.map((r) => ({
+        id: r.id,
+        role: r.from === me ? "user" : "character",
+        text: r.text,
+      })));
+    });
+  }, [matchId, characterId, setMessages]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -44,6 +64,14 @@ export default function ChatScreen({ characterId, onBack }: Props) {
     const text = draft.trim();
     if (!text || busy) return;
     setDraft("");
+
+    // real user↔user: write to the shared thread; the listener reflects it
+    if (matchId) {
+      await sendRealMessage(matchId, text);
+      return;
+    }
+
+    // AI character: optimistic user bubble + Gemini reply
     setBusy(true);
     appendUser(character.id, text);
     const history = [
@@ -79,7 +107,9 @@ export default function ChatScreen({ characterId, onBack }: Props) {
         />
         <div className="min-w-0">
           <p className="truncate font-semibold leading-tight">{character.name}</p>
-          <p className="text-xs text-emerald-400">✨ AI Karakter · çevrimiçi</p>
+          <p className="text-xs text-emerald-400">
+            {isReal ? "çevrimiçi" : "✨ AI Karakter · çevrimiçi"}
+          </p>
         </div>
       </header>
 
@@ -88,6 +118,16 @@ export default function ChatScreen({ characterId, onBack }: Props) {
         ref={scrollRef}
         className="min-h-0 flex-1 space-y-2 overflow-y-auto py-2"
       >
+        {isReal && messages.length === 0 && (
+          <div className="grid h-full place-items-center px-6 text-center text-sm text-white/50">
+            <div>
+              <p className="text-2xl">🎉</p>
+              <p className="mt-2">
+                {character.name} ile eşleştiniz! İlk mesajı sen at 👋
+              </p>
+            </div>
+          </div>
+        )}
         <AnimatePresence initial={false}>
           {messages.map((m) => (
             <motion.div
@@ -130,9 +170,11 @@ export default function ChatScreen({ characterId, onBack }: Props) {
           ➤
         </motion.button>
       </div>
-      <p className="pb-2 text-center text-[11px] text-white/30">
-        Tüm yanıtlar yapay zekâdır.
-      </p>
+      {!isReal && (
+        <p className="pb-2 text-center text-[11px] text-white/30">
+          Tüm yanıtlar yapay zekâdır.
+        </p>
+      )}
     </div>
   );
 }

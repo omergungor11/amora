@@ -49,6 +49,7 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
   // re-rank the deck whenever the taste profile changes
   const tasteTick = useTaste((s) => s.likes + s.passes);
   const addMatch = useMatches((s) => s.addMatch);
+  const addRealMatch = useMatches((s) => s.addRealMatch);
   const resolveOpener = useMatches((s) => s.resolveOpener);
   const profile = useProfile((s) => s.profile);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
@@ -172,8 +173,7 @@ export default function SwipeDeck({ interestedIn, onOpenChat }: Props) {
       if (dir === "like" || dir === "superlike") {
         sendLike(char.id, dir).then((matchId) => {
           if (!matchId) return; // they haven't liked back (yet)
-          addMatch(char);
-          resolveOpener(char.id, "Eşleştiniz! 🎉 İlk mesajı sen at 👋");
+          addRealMatch(char, matchId); // shared thread, no AI opener
           setMatched(char);
         });
       }

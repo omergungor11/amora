@@ -1,6 +1,7 @@
 import { db, auth } from "./firebase";
 import {
   doc, getDoc, setDoc, collection, getDocs, addDoc, query, orderBy, where,
+  onSnapshot,
 } from "firebase/firestore";
 import type { UserProfile, SwipeDir, PublicProfile } from "../types";
 import { normalizeProfile } from "./profile";
@@ -121,6 +122,82 @@ export async function sendLike(toUid: string, kind: LikeKind): Promise<string | 
   } catch (err) {
     console.warn("[firebase] sendLike failed:", err);
     return null;
+  }
+}
+
+/** A single public profile by uid (e.g. the other side of a match). */
+export async function loadPublicProfile(id: string): Promise<PublicProfile | null> {
+  if (!db) return null;
+  try {
+    const s = await getDoc(doc(db, "profiles", id));
+    return s.exists() ? (s.data() as PublicProfile) : null;
+  } catch (err) {
+    console.warn("[firebase] loadPublicProfile failed:", err);
+    return null;
+  }
+}
+
+export type RealMatch = { matchId: string; otherUid: string; createdAt: number };
+
+function toRealMatch(id: string, data: Record<string, unknown>, me: string): RealMatch {
+  const users = (data.users as string[]) ?? [];
+  return {
+    matchId: id,
+    otherUid: users.find((u) => u !== me) ?? "",
+    createdAt: (data.createdAt as number) ?? 0,
+  };
+}
+
+/** Live subscription to my matches (real user↔user). Fires immediately with the
+ *  current set, then on every change — powers first-liker visibility. */
+export function listenRealMatches(cb: (matches: RealMatch[]) => void): () => void {
+  const fdb = db;
+  const me = uid();
+  if (!fdb || !me) return () => {};
+  const q = query(collection(fdb, "matches"), where("users", "array-contains", me));
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => toRealMatch(d.id, d.data(), me)).filter((m) => m.otherUid)),
+    (err) => console.warn("[firebase] listenRealMatches failed:", err),
+  );
+}
+
+export type RealMessageRow = { id: string; from: string; text: string; createdAt: number };
+
+/** Live subscription to a shared match thread, ordered oldest→newest. */
+export function listenMessages(
+  matchId: string,
+  cb: (msgs: RealMessageRow[]) => void,
+): () => void {
+  const fdb = db;
+  if (!fdb) return () => {};
+  const q = query(collection(fdb, "matches", matchId, "messages"), orderBy("createdAt"));
+  return onSnapshot(
+    q,
+    (snap) =>
+      cb(
+        snap.docs.map((d) => ({
+          id: d.id,
+          from: d.data().from as string,
+          text: d.data().text as string,
+          createdAt: (d.data().createdAt as number) ?? 0,
+        })),
+      ),
+    (err) => console.warn("[firebase] listenMessages failed:", err),
+  );
+}
+
+/** Write a message into a shared match thread. */
+export async function sendRealMessage(matchId: string, text: string): Promise<void> {
+  const fdb = db;
+  const me = uid();
+  if (!fdb || !me) return;
+  try {
+    await addDoc(collection(fdb, "matches", matchId, "messages"), {
+      from: me, text, createdAt: Date.now(),
+    });
+  } catch (err) {
+    console.warn("[firebase] sendRealMessage failed:", err);
   }
 }
 

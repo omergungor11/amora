@@ -41,7 +41,9 @@ export default function Inbox({ onOpen }: Props) {
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">{conv.character.name}</p>
                   <p className="truncate text-sm text-white/60">
-                    {last?.pending ? "yazıyor…" : last?.text}
+                    {last?.pending
+                      ? "yazıyor…"
+                      : (last?.text ?? "Eşleştiniz! İlk mesajı sen at 👋")}
                   </p>
                 </div>
               </motion.button>

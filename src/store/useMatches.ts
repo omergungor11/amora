@@ -13,6 +13,8 @@ export type Message = {
 export type Conversation = {
   character: Character;
   messages: Message[];
+  /** present for real user↔user matches; drives shared-thread messaging */
+  matchId?: string;
 };
 
 let seq = 0;
@@ -25,6 +27,10 @@ type MatchesState = {
   order: string[];
   /** create a match; the opener starts as a pending (typing) message */
   addMatch: (character: Character) => void;
+  /** register a real user↔user match (shared thread, no AI opener) */
+  addRealMatch: (character: Character, matchId: string) => void;
+  /** replace a conversation's messages (used by the live thread listener) */
+  setMessages: (id: string, messages: Message[]) => void;
   /** fill the pending opener once the style-driven line is generated */
   resolveOpener: (id: string, text: string) => void;
   /** replace state with conversations loaded from Firestore */
@@ -55,6 +61,34 @@ export const useMatches = create<MatchesState>((set, get) => ({
     }));
     void saveMatch(character.id); // persist (no-op if Firebase disabled)
   },
+  addRealMatch: (character, matchId) => {
+    const existing = get().conversations[character.id];
+    if (existing) {
+      // already known — just ensure the matchId is attached
+      if (!existing.matchId) {
+        set((s) => ({
+          conversations: {
+            ...s.conversations,
+            [character.id]: { ...existing, matchId },
+          },
+        }));
+      }
+      return;
+    }
+    set((s) => ({
+      order: [character.id, ...s.order],
+      conversations: {
+        ...s.conversations,
+        [character.id]: { character, matchId, messages: [] },
+      },
+    }));
+  },
+  setMessages: (id, messages) =>
+    set((s) => {
+      const conv = s.conversations[id];
+      if (!conv) return s;
+      return { conversations: { ...s.conversations, [id]: { ...conv, messages } } };
+    }),
   resolveOpener: (id, text) => {
     const conv = get().conversations[id];
     const first = conv?.messages[0];
